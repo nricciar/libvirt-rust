@@ -26,6 +26,7 @@ use storage_vol::sys::virStorageVolPtr;
 use connect::Connect;
 use error::Error;
 use storage_vol::StorageVol;
+use std::ptr;
 
 pub mod sys {
     extern crate libc;
@@ -92,6 +93,9 @@ extern "C" {
                              info: sys::virStoragePoolInfoPtr)
                              -> libc::c_int;
     fn virStoragePoolNumOfVolumes(ptr: sys::virStoragePoolPtr) -> libc::c_int;
+    fn virStoragePoolListAllVolumes(p: sys::virStoragePoolPtr,
+                                    v: *mut *mut virStorageVolPtr,
+                                    flags: libc::c_uint) -> libc::c_int;
 }
 
 pub type StoragePoolXMLFlags = self::libc::c_uint;
@@ -396,6 +400,21 @@ impl StoragePool {
                 return Err(Error::new());
             }
             return Ok(StoragePoolInfo::from_ptr(pinfo));
+        }
+    }
+
+    pub fn list_all_volumes(&self) -> Vec<StorageVol> {
+        unsafe {
+            let mut volumes: *mut virStorageVolPtr = ptr::null_mut();
+            let total = virStoragePoolListAllVolumes(self.as_ptr(),
+                                                     &mut volumes,
+                                                     0 as libc::c_uint);
+            let mut ret: Vec<StorageVol> = Vec::new();
+            for x in 0..total as isize {
+                ret.push(StorageVol::new(*volumes.offset(x)));
+            }
+            libc::free(volumes as *mut libc::c_void);
+            ret
         }
     }
 }
